@@ -1,13 +1,53 @@
-name: Build APK
-on: [push]
+name: CI-CD Auto Fix and Build
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: write  # ضروري لكي يستطيع الأكشن تعديل الكود وإصلاح الأخطاء بنفسه
 
 jobs:
-  build:
-    runs-on: ubuntu-22.04
+  lint-and-fix:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # الخطوة الأولى: إصلاح أخطاء التنسيق تلقائياً
+      - name: Auto-fix Python Code
+        run: |
+          pip install black
+          black . # أداة تقوم بإصلاح المسافات وتنسيق الكود تلقائياً
+          
+      # الخطوة الثانية: حفظ التعديلات وإعادتها للمستودع
+      - name: Commit fixes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Fix: Auto-formatted Python code"
+
+  build-android:
+    needs: lint-and-fix # لا يبدأ بناء التطبيق إلا بعد إصلاح الكود
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # الخطوة الثالثة: بناء ملف الـ APK (النشر)
       - name: Build with Buildozer
         uses: ArtemSerebrennkov/buildozer-action@v1
         with:
           command: buildozer android debug
           buildozer_version: master
+
+      # الخطوة الرابعة: نشر الملف الناتج (Artifacts)
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mobile-App-Release
+          path: bin/*.apk
